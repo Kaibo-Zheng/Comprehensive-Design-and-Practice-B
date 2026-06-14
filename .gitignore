@@ -1,0 +1,35 @@
+__pycache__/
+*.py[cod]
+
+# Local build/package metadata
+*.egg-info/
+build/
+dist/
+
+# Runtime/model artifacts
+model/*.onnx
+model/*.rknn
+*.onnx
+*.rknn
+*.pt
+*.pth
+*.ckpt
+*.engine
+
+# Generated media and logs
+audio/*.wav
+audio/*.mp3
+audio/*.flac
+result/logs/
+reports/logs
+
+# Native build outputs
+*.so
+*.o
+*.a
+*.whl
+
+# Local/vendor reference material
+archive/legacy_weights/
+archive/legacy_experiments/
+external/
