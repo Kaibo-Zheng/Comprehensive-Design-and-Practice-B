@@ -1,4 +1,4 @@
-"""Tests for application-level configuration assembly."""
+"""应用层配置组装测试。"""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from app import build_configs, parse_args
+from tracker.app import build_configs, parse_args
 
 
 def test_shared_center_still_applies_to_both_axes():

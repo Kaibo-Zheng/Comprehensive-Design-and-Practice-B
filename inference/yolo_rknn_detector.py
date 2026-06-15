@@ -1,23 +1,12 @@
-"""YOLO RKNN (RK3588 NPU) person detector.
+"""基于 RK3588 NPU 的 YOLO RKNN 人体检测器。
 
-Runs a ``.rknn`` model on the NPU through the on-board runtime
-``rknn_toolkit_lite2`` (imported as ``rknnlite``). It mirrors
-:class:`inference.yolo_onnx_detector.YoloOnnxDetector` exactly — same
-``detect(frame) -> Target | None`` interface, same ``last_timing`` dict, same
-stale-hold behaviour — so ``app.py`` / controller / metrics never need to know
-whether detection runs on the CPU (ONNX) or the NPU (RKNN).
+该检测器通过板端 RKNN 轻量运行时执行 ``.rknn`` 模型。它与 ONNX 检测器
+保持相同的 detect 接口、last_timing 结构和历史目标保持策略，因此主程序、
+控制器和指标记录不需要关心检测运行在 CPU 还是 NPU 上。
 
-Pre/post-processing is shared with the ONNX path via
-:mod:`inference.postprocess` (``letterbox`` + ``decode_yolo_output``).
-
-Runtime split:
-
-- **Conversion** (ONNX -> ``.rknn``) uses the full ``rknn-toolkit2`` on an x86
-  host — see ``scripts/convert_yolo_rknn.sh``.
-- **Inference** (this file) uses ``rknn_toolkit_lite2`` on the board.
-
-If the lite runtime is not importable, ``__init__`` raises a clear
-``RuntimeError`` and **never silently falls back to the CPU** (TASK-007).
+预处理和后处理逻辑通过 inference.postprocess 与 ONNX 路线共用。模型转换在
+主机上完成，板端只负责加载和推理。若无法导入轻量运行时，初始化会直接抛出
+明确异常，不会静默回退到 CPU。
 """
 
 from __future__ import annotations
@@ -28,18 +17,17 @@ from typing import Dict, Optional
 
 import numpy as np
 
-from core.config import DetectorConfig
+from common.config import DetectorConfig
 
 from .detector import Target
 from .postprocess import decode_yolo_output, letterbox, select_target
 
 
 def _import_rknnlite():
-    """Return the ``RKNNLite`` class from whichever lite module is installed.
+    """从可用的轻量运行模块中导入 RKNNLite 类。
 
-    The on-board runtime ships under two names depending on the release
-    (``rknnlite`` or ``rknn_toolkit_lite2``). Raise a clear, actionable
-    ``RuntimeError`` if neither imports — callers must not fall back to CPU.
+    不同版本的板端运行时模块名可能不同；如果都不可用，则抛出明确异常，
+    调用方不应回退到 CPU。
     """
 
     attempts = []
@@ -47,7 +35,7 @@ def _import_rknnlite():
         try:
             module = __import__(module_name, fromlist=["RKNNLite"])
             return getattr(module, "RKNNLite")
-        except Exception as exc:  # noqa: BLE001 - report every failure verbatim
+        except Exception as exc:  # noqa: BLE001
             attempts.append(f"{module_name}: {type(exc).__name__}: {exc}")
     raise RuntimeError(
         "RKNN Lite runtime not available (tried " + "; ".join(attempts) + "). "
@@ -58,7 +46,7 @@ def _import_rknnlite():
 
 
 class YoloRknnDetector:
-    """NPU YOLO detector. Same public surface as ``YoloOnnxDetector``."""
+    """NPU YOLO 检测器，对外接口与 ONNX 检测器保持一致。"""
 
     def __init__(self, config: DetectorConfig):
         self.config = config
@@ -75,15 +63,14 @@ class YoloRknnDetector:
         if not config.model_path:
             raise RuntimeError("yolo_rknn detector requires --model <path-to-.rknn>")
 
-        # Precondition first: can we even run RKNN on this host? If not, say so
-        # plainly regardless of the model path (this is the common board blocker).
+        # 先检查当前环境是否能运行 RKNN，避免把运行时问题误报为模型路径问题。
         rknn_lite_cls = _import_rknnlite()
 
         model_path = Path(config.model_path)
         if not model_path.is_file():
             raise RuntimeError(
                 f"RKNN model not found: {model_path}. Convert one on an x86 host with "
-                "`bash scripts/convert_yolo_rknn.sh --onnx <model.onnx> "
+                "`python tool/convert_yolo_rknn.py --onnx <model.onnx> "
                 f"--output {model_path} --target rk3588` and copy it to the board."
             )
 
@@ -91,8 +78,7 @@ class YoloRknnDetector:
         if self._rknn.load_rknn(str(model_path)) != 0:
             raise RuntimeError(f"RKNNLite.load_rknn failed for {model_path}")
 
-        # Spread inference across all three RK3588 NPU cores when the constant is
-        # exposed; otherwise let the runtime pick a default core.
+        # 如果运行时暴露了三核 NPU 掩码，则尽量使用全部 NPU 核心；否则交给运行时选择。
         core_mask = getattr(rknn_lite_cls, "NPU_CORE_0_1_2", None)
         ret = (
             self._rknn.init_runtime(core_mask=core_mask)
@@ -110,13 +96,11 @@ class YoloRknnDetector:
         frame_center = (frame.shape[1] / 2.0, frame.shape[0] / 2.0)
 
         t0 = time.perf_counter()
-        # RKNN models converted with mean=0 / std=255 (the default in
-        # scripts/convert_yolo_rknn.sh) take a letterboxed **NHWC uint8 RGB**
-        # image and apply the /255 normalization internally — so, unlike the
-        # ONNX path, we do NOT divide here or transpose to NCHW.
-        padded = letterbox(frame, self.input_size)            # HxWx3 uint8 BGR
-        rgb = np.ascontiguousarray(padded[:, :, ::-1])        # BGR -> RGB
-        tensor = rgb[np.newaxis, ...]                         # NHWC, batch=1
+        # 按转换参数，RKNN 模型接收 NHWC uint8 RGB 输入，并在模型内部完成归一化。
+        # 因此这里不同于 ONNX 路线，不再除以 255，也不转成 NCHW。
+        padded = letterbox(frame, self.input_size)            # 高 x 宽 x 3 的 uint8 BGR 图像。
+        rgb = np.ascontiguousarray(padded[:, :, ::-1])        # BGR 转 RGB。
+        tensor = rgb[np.newaxis, ...]                         # NHWC 格式，批量大小为 1。
         t1 = time.perf_counter()
         outputs = self._rknn.inference(inputs=[tensor])
         t2 = time.perf_counter()
@@ -143,7 +127,7 @@ class YoloRknnDetector:
             self._miss_count = 0
             return target
 
-        # Hold the last target as stale for a few frames, like the other detectors.
+        # 与其他检测器一致，短时间漏检时保留上一目标并标记为历史目标。
         if self._last_target is not None and self._miss_count < self.hold_frames:
             self._miss_count += 1
             return Target(
@@ -172,12 +156,12 @@ class YoloRknnDetector:
         )
 
     def close(self) -> None:
-        """Release the NPU runtime. Safe to call more than once."""
+        """释放 NPU 运行时；重复调用也是安全的。"""
 
         rknn = getattr(self, "_rknn", None)
         if rknn is not None:
             try:
                 rknn.release()
-            except Exception:  # noqa: BLE001 - best-effort cleanup on shutdown
+            except Exception:  # noqa: BLE001
                 pass
             self._rknn = None

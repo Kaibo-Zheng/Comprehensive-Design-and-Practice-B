@@ -1,4 +1,4 @@
-"""Tests for target-acquisition voice event gating."""
+"""目标获取语音事件门控测试。"""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from core.config import VoiceConfig
+from common.config import VoiceConfig
 from inference.detector import Target
 from voice import SpeechEventGate, VoiceNotifier, format_voice_text
 

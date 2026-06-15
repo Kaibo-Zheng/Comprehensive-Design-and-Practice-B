@@ -1,282 +1,150 @@
-# Two-Axis Gimbal Person Tracker
+# 双自由度云台实时人体跟踪系统
 
-This is the course project directory for a two-axis camera gimbal person tracker.
-The main demo uses OpenCV face/person detection, a proportional servo controller,
-CSV metrics logging, and a PCA9685-driven two-axis gimbal. Detection is
-pluggable behind one `Target` interface: lightweight OpenCV
-(`face`/`upperbody`/`hog`), a YOLO **ONNX** detector on the CPU, and a YOLO
-**RKNN** detector for the RK3588 NPU. An optional built-in web monitor streams
-the annotated video and live status. C/C++ acceleration code lives under
-`acceleration/`.
+本仓库是《综合设计与实践B》课程大作业项目。项目基于 Orange Pi 5 Pro / RK3588 开发板，实现了一个双自由度云台人体跟踪系统：摄像头采集画面后，系统通过 OpenCV 或 YOLO 检测人体目标，计算目标中心与画面中心之间的偏差，并驱动 PCA9685 舵机控制板调整 pan/tilt 两个舵机，使目标尽量保持在画面中心。
 
-## Directory Layout
+项目同时实现了 Web 监控、语音提示、CSV 指标记录、C/C++ 加速、pymp 并行实验和 RKNN/NPU 部署验证，用于展示完整的嵌入式视觉跟踪流程。
+
+## 项目结构
 
 ```text
 .
-├── app.py                 # Main application entry point
-├── camera.py              # Camera access
-├── core/                  # Config and metrics
-├── inference/             # OpenCV / YOLO detectors and postprocess
-├── motion/                # Controller and gimbal actuation
-├── web/                   # Web monitor and MJPEG streamer
-├── voice/                 # Voice notification
-├── tests/                 # Tracker unit tests
-├── acceleration/          # C/C++ acceleration code and benchmark package
-│   └── src/cconv.c        # C extension source
-├── archive/
-│   ├── legacy_experiments/
-│   ├── legacy_weights/
-│   └── legacy_bonus/
-│       └── rknn_bundle/   # archived RKNN/NPU conversion toolchain and notes
-├── scripts/               # Fixed one-line demo / convert / benchmark commands
-│   └── run.sh             # Final integrated hardware demo
-├── model/                 # Model checkpoints and conversion notes
-├── audio/                 # Playback-mode voice alert WAV assets
-├── illustration/          # Generated figures and screenshots
-├── result/                # Final report, task summary, runtime logs
-├── reports/               # Compatibility links to result/audio/illustration
-├── doc/                   # Local notes and supporting documents
-├── AGENTS.md              # Repository instructions
-├── pyproject.toml         # Editable install / console entry points
-├── 大作业要求.pdf          # Assignment requirements
-└── environment.yml        # Conda environment recipe
+├── tracker/        # 主程序入口和摄像头封装
+├── common/         # 配置、限幅函数和运行指标记录
+├── inference/      # OpenCV、YOLO ONNX、YOLO RKNN 检测与后处理
+├── motion/         # 比例控制器、PCA9685 舵机驱动和云台状态
+├── web/            # Web 监控页面、MJPEG 视频流和状态接口
+├── voice/          # 目标出现时的语音提示逻辑
+├── acceleration/   # C/C++ 扩展、pymp 卷积实验和性能 benchmark
+├── tool/           # RKNN 转换、NMS benchmark、舵机扫描等辅助工具
+├── scripts/        # 常用演示脚本
+├── tests/          # CPU 安全的单元测试
+├── report/         # 最终课程报告 PDF
+├── result/         # 实验结果 CSV 与逐帧日志
+├── model/          # 本地模型文件目录，模型权重不提交
+├── audio/          # 语音提示音频资源
+├── illustration/   # 报告图表、截图和绘图素材
+├── environment.yml # Conda 环境配置
+└── pyproject.toml  # Python 包配置和命令行入口
 ```
 
-## Environment
+## 环境配置
 
-The active project environment is the conda environment `b`.
-
-```bash
-source /root/miniconda3/etc/profile.d/conda.sh
-conda activate b
-```
-
-To recreate or update it on this board from the checked-in environment file:
+推荐使用 Python 3.10。课程开发环境使用 conda 环境 `b`：
 
 ```bash
 conda env update -n b -f environment.yml
 conda activate b
 python -m pip install -e . --no-deps
-python -m pip check
 ```
 
-`environment.yml` records the package set used on this board. The editable
-install provides the `gimbal-tracker*` console entry points while leaving the
-repo-local `python -m ...` commands unchanged.
+RKNN runtime 与 NPU 驱动依赖开发板环境和 Rockchip 官方 wheel，不建议写死在通用环境文件里。需要运行 RKNN 检测时，应在 RK3588 开发板上单独安装 `rknn-toolkit-lite2` 相关运行库。
 
-The Python modules and packages live directly at the repo root. Repo-local
-scripts add the repo root to `PYTHONPATH`, and external use should go through
-an editable install.
+## 常用命令
 
-For just refreshing the editable install:
+无硬件快速自检：
 
 ```bash
-python -m pip install -e . --no-deps
+python -m tracker.app --mock-servo --no-display --max-frames 5
 ```
 
-## Main Commands
-
-Mock-servo smoke test:
+运行单元测试：
 
 ```bash
-python -m app --mock-servo --no-display --max-frames 5 --log result/logs/tracking_smoke.csv
+python -m pytest tests -q
 ```
 
-Detector preview:
+OpenCV 保底检测与云台跟踪：
 
 ```bash
-python -m inference.tune_detector --detector face
+python -m tracker.app --detector face
 ```
 
-Webcam MJPEG stream for SSH viewing:
+ONNX CPU 检测：
 
 ```bash
-/root/miniconda3/envs/b/bin/python3 -m web.stream_webcam --camera 0 --host 127.0.0.1 --port 8080 --width 640 --height 480 --fps 30
+python -m tracker.app --detector yolo_onnx --model model/yolo11n.onnx --target-class person --mock-servo --no-display
 ```
 
-From your local machine, forward the port over SSH:
+RKNN NPU 检测：
 
 ```bash
-ssh -L 8080:127.0.0.1:8080 user@board-ip
+python -m tracker.app --detector yolo_rknn --model model/yolo11n.rknn --target-class person --mock-servo --no-display
 ```
 
-Then open `http://127.0.0.1:8080/`. The stream endpoint is `/stream.mjpg`,
-single-frame snapshot is `/snapshot.jpg`, and runtime status is `/status.json`.
-If testing with `curl` on this board, use `curl --noproxy 127.0.0.1 ...` so the
-local proxy does not intercept the loopback request.
-
-Safe calibration:
+启动带 Web 监控的跟踪：
 
 ```bash
-python -m app --mock-servo --calibrate
-python -m app --calibrate
+python -m tracker.app --detector face --web-host 0.0.0.0 --web-port 8080 --no-display
 ```
 
-Real gimbal run:
+浏览器访问：
 
-```bash
-python -m app --detector face --log result/logs/tracking_log.csv
+```text
+http://<开发板IP>:8080/
 ```
 
-Acceleration benchmarks (pure Python, `pymp`, and C extension):
-
-```bash
-python acceleration/benchmark.py --height 160 --width 240 --iterations 3
-bash scripts/benchmark_nms.sh --boxes 1200 --iterations 50
-```
-
-Build the C extension wheel:
+构建 C 扩展：
 
 ```bash
 python -m build acceleration
 ```
 
-## One-line demo scripts
-
-Fixed entry points under `scripts/` so live demos don't depend on long command
-lines. Each prints the exact command it runs and writes a CSV under
-`result/logs/`. Override defaults with env vars (`CAMERA`, `MODEL`, `WEB_PORT`,
-`MOCK=1`, `MAX_FRAMES`, ...).
+运行性能测试：
 
 ```bash
-bash scripts/run_opencv_demo.sh --mock   # fallback OpenCV demo, headless mock servo
-bash scripts/run_opencv_demo.sh          # OpenCV demo, real servo (on the board)
-bash scripts/run_web_demo.sh             # tracking + web monitor (browse the board)
-bash scripts/run_voice_demo.sh --mock    # target acquisition voice notification
-bash scripts/run_onnx_demo.sh --mock     # YOLO ONNX CPU demo
-bash scripts/run_rknn_demo.sh --mock     # YOLO RKNN NPU demo
-bash scripts/benchmark_all.sh            # Python/pymp/C 5x5 conv benchmark (WITH_YOLO=1 adds ONNX)
-bash scripts/benchmark_nms.sh            # Python vs C YOLO NMS benchmark
+python acceleration/benchmark.py --height 160 --width 240 --iterations 3
+python tool/benchmark_nms.py --boxes 1200 --iterations 50
 ```
 
-## YOLO detector modes
+## 演示脚本
 
-Detection is chosen with `--detector`. YOLO needs a model via `--model`; the COCO
-`person` class is tracked by default. A missing model or missing NPU runtime exits
-with a clear error — never a silent fallback to another device.
+`scripts/` 中保留了一组一行式脚本，便于现场运行：
 
 ```bash
-# YOLO ONNX on the CPU (onnxruntime)
-python -m app --detector yolo_onnx \
-  --model model/yolo11n.onnx --target-class person \
-  --mock-servo --no-display --max-frames 30 --log result/logs/p5_yolo_onnx.csv
-
-# YOLO RKNN on the RK3588 NPU (rknnlite + converted .rknn)
-python -m app --detector yolo_rknn \
-  --model model/yolo11n.rknn --target-class person \
-  --mock-servo --no-display --max-frames 30 --log result/logs/p7_yolo_rknn.csv
+bash scripts/run.sh
+bash scripts/run_camera.sh
+bash scripts/run_rknn.sh
+bash scripts/run_tracking.sh
+bash scripts/run_web.sh
+bash scripts/run_voice.sh
+bash scripts/run_servo.sh
+bash scripts/run_performance.sh
 ```
 
-Convert ONNX → RKNN on an x86 host (the board only runs the result):
+真实云台运行前，应先确认 PCA9685 接线、舵机通道、机械限位和供电状态。若方向相反，可调整 pan/tilt 方向符号；若抖动明显，可减小单帧最大步长或增大死区。
 
-```bash
-bash scripts/convert_yolo_rknn.sh --onnx model/yolo11n.onnx \
-  --output model/yolo11n.rknn --target rk3588
+## 实验结果
+
+`result/` 目录只保留实验结果 CSV：
+
+```text
+result/
+├── required_results.csv
+├── tracking_performance.csv
+├── bonus_performance.csv
+└── rknn_accuracy.csv
 ```
 
-Models are **not** committed; the current board keeps the RKNN demo model under
-`model/yolo11n.rknn`. See `model/README.md` for sourcing/conversion.
+当前保留结果包括真实云台运行、RKNN 检测、ONNX/RKNN 性能对比、C 扩展加速和 pymp 并行实验等数据。`rknn_accuracy.csv` 记录 1296 帧 RKNN 云台跟踪日志，其中 1096 帧为有效新鲜目标帧；稳定片段第 855--954 帧共 100 帧，平均像素误差为 81.78 px。报告中的图表和文字分析基于这些数据整理。
 
-## Final integrated demo
+## 报告
 
-This is the full live command for the final hardware demo: RKNN/NPU person
-detection, closed-loop gimbal tracking, integrated Web monitor, and Chinese
-voice notification on target acquisition. The wrapper script also pins
-CPU/NPU/DDR governors to `performance` and limits the MJPEG stream to reduce
-Web encoding overhead.
+课程报告成版文件为：
 
-```bash
-cd /root/ws && bash scripts/run.sh
+```text
+report/report.pdf
 ```
 
-For the physical gimbal, `scripts/run.sh` uses conservative tilt defaults to avoid
-snapping the second servo into a mechanical corner: `TILT_CENTER=45`,
-`TILT_RANGE=0,90`, `PAN_SIGN=-1`, `TILT_SIGN=1`, `MAX_STEP=0.8`, and
-`STARTUP_CENTER=pan`.
-That startup mode centers only the pan axis; the tilt axis is written only when
-vertical target error requires it. Tune them without editing the script:
+报告图表素材保存在 `illustration/`，主要结果 CSV 保存在 `result/`。LaTeX 编译中间文件和草稿源文件不作为最终提交内容。
 
-```bash
-TILT_CENTER=45 TILT_RANGE=0,90 MAX_STEP=0.8 bash scripts/run.sh
-```
+## 模型与大文件
 
-To avoid any startup servo movement, use `STARTUP_CENTER=none bash scripts/run.sh`.
+模型权重、RKNN 模型、生成视频、大型音频、虚拟环境和机器相关路径不应提交到仓库。需要运行 YOLO ONNX 或 RKNN 检测时，将对应模型放入 `model/` 目录即可。本地常用文件名为 `model/yolo11n.onnx` 和 `model/yolo11n.rknn`，它们已由 `.gitignore` 排除。
 
-Open `http://<board-ip>:8080/` from a browser. The default voice playback
-script sends audio to USB Audio device `plughw:3,0`; set
-`VOICE_DEVICE=plughw:2,0` (or another ALSA device) before the command if the
-speaker is connected to a different sound card.
+## 注意事项
 
-## Integrated web monitor
-
-`app.py` can serve the annotated video and live status itself (no extra process) —
-the recommended way to watch a headless run:
-
-```bash
-python -m app --detector face --web-host 0.0.0.0 --web-port 8080 \
-  --no-display --log result/logs/web_demo.csv
-```
-
-Endpoints: `/` (page), `/stream.mjpg`, `/snapshot.jpg`, `/status.json`. The
-standalone `web.stream_webcam` module above is a camera-only
-alternative.
-
-## Voice notification
-
-The tracker can optionally play a short voice notification when a target is
-first acquired. It is off by default, runs in a background thread, and has a
-cooldown so one continuous detection does not speak every frame. The default
-announcement is Chinese (`检测到人员。`, from `--voice-text "检测到{label_zh}。"`);
-pass `--voice-text "Detected {label}."` and point `--voice-audio-path` at a
-matching WAV if you want English instead.
-
-On this 4 GB board, the repo is configured around **playback mode** for voice
-alerts. Use one of the bundled WAV files or provide your own:
-
-```bash
-python -m app --detector face --mock-servo --no-display \
-  --voice-enabled --voice-mode play \
-  --voice-audio-path audio/found_person_zh_beep_loud_44k.wav \
-  --voice-cooldown 5
-```
-
-Useful options:
-
-- `--voice-mode play`: play a prepared WAV without loading MOSS TTS during tracking.
-- `--voice-audio-path audio/found_person_zh_beep_loud_44k.wav`: current demo WAV (`发现人员。`) with a short wake-up tone before the Chinese announcement.
-- `--voice-player "scripts/play_voice_usb.sh"`: play via USB Audio (`VOICE_DEVICE` overrides the ALSA device).
-- `--voice-no-playback`: exercise event logic without using the audio device.
-
-## Troubleshooting
-
-- **Camera busy / won't open**: `ls -l /dev/video*`, `fuser -v /dev/video0`; stop
-  the old process rather than blindly changing the camera index.
-- **RKNN runtime missing**: install `rknn_toolkit_lite2` on the board and provide a
-  `.rknn` model, or use `--detector yolo_onnx`. Collect board status with
-  `bash scripts/check_rknn_env.sh`.
-- **Port 8080 busy**: use a different `--web-port` (or `WEB_PORT=...` for the script).
-- **Servo moves the wrong way**: flip `--pan-sign` / `--tilt-sign`; reduce
-  `--max-step` and widen `--dead-zone` if it jitters.
-- **One servo does not physically move**: stop the tracker first, then test the
-  PCA9685 channel directly, for example
-  `bash scripts/servo_axis_sweep.sh --axis tilt --channel 1 --center 90 --delta 5`.
-- **Tilt servo jumps to a bad angle on startup**: lower `TILT_CENTER` and keep
-  `TILT_RANGE` narrow for the current mechanical mount, for example
-  `TILT_CENTER=45 TILT_RANGE=0,90 bash scripts/run.sh`.
-- **Tilt follows away from the target**: flip the final-demo sign with
-  `TILT_SIGN=-1 bash scripts/run.sh` or `TILT_SIGN=1 bash scripts/run.sh`; the right value
-  depends on the current servo horn orientation.
-- **Low memory (~4GB board)**: don't run YOLO inference, the web service, and a
-  benchmark at the same time; prefer `--mock-servo --no-display --max-frames 30`
-  for tests and check `free -h` before/after heavy commands.
-- **Voice is silent**: confirm `aplay` can use the audio device. For YOLO runs,
-  use `--voice-mode play` with a prepared WAV; runtime MOSS synthesis can exceed
-  memory headroom on this board.
-
-## Notes
-
-- Run real servo commands only on the board with the PCA9685 and gimbal connected.
-- The default servo channels are pan `0` and tilt `1`.
-- Detectors: `face` (default, OpenCV Haar), `upperbody`, `hog`, `yolo_onnx` (CPU), `yolo_rknn` (RK3588 NPU).
-- Logs used in the report are under `result/logs/`; the per-task summary is in `result/result.md`, and the final report is `result/final_report.md`.
-- `archive/` is local backup material and is not required for submission.
+- 真实舵机测试只应在开发板、PCA9685、舵机和外部供电连接正确后进行。
+- 日常验证优先使用 `--mock-servo` 和 `--no-display`。
+- Web 监控会占用端口，若 8080 被占用可改用其他端口。
+- RKNN 检测不会静默回退到 CPU；缺少 runtime 或模型时会直接报错。
+- 音频提示默认更适合播放预生成 WAV，避免在 4GB 开发板上实时加载大型 TTS 模型。

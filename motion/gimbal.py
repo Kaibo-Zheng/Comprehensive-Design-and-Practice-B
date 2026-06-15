@@ -1,4 +1,4 @@
-"""PCA9685-backed two-axis gimbal control with mock mode."""
+"""基于 PCA9685 的双轴云台控制，支持模拟模式。"""
 
 from __future__ import annotations
 
@@ -6,13 +6,13 @@ import time
 from dataclasses import dataclass
 from typing import Literal
 
-from core.config import ServoAxisConfig, ServoConfig, clamp
+from common.config import ServoAxisConfig, ServoConfig, clamp
 
 Axis = Literal["pan", "tilt"]
 
 
 class PCA9685Lite:
-    """Small smbus2 PCA9685 driver used by the tracker."""
+    """跟踪器使用的轻量级 smbus2 PCA9685 驱动。"""
 
     MODE1 = 0x00
     PRESCALE = 0xFE

@@ -1,0 +1,8 @@
+category,metric,baseline,final_result,comparison,notes
+tracking_accuracy,target_detection,,RKNN detected person in 20/20 validation frames,100% detected frames,Per-frame pixel-error CSV is not retained in this repo
+tracking_accuracy,real_gimbal_stability,,150-frame real run: pan 88-94 deg; tilt 85-99 deg; max consecutive at-limit=0; direction confirmed correct,stable without limit hit,Represents retained hardware tracking evidence
+tracking_speed,real_gimbal_tracking,,16 FPS,,Face detector real-gimbal run
+tracking_speed,rknn_tracking,ONNX CPU: 137 ms inference and about 2.0 FPS,RKNN NPU: 71.36 ms inference and about 7.05 FPS,1.92x inference speedup; 3.53x FPS improvement,20-frame RKNN validation
+bonus1_cpp_whl,5x5_convolution,Python/NumPy: 1493.016 ms/frame,C extension: 0.915 ms/frame,1632.33x speedup; max diff 4.6e-5,Compiled whl-backed C extension
+bonus3_pymp,5x5_convolution,Python/NumPy: 1493.016 ms/frame,pymp x4: 447.617 ms/frame,3.34x speedup,Parallel Python task acceleration
+bonus4_rknn,yolo_person_detection,YOLO ONNX CPU: 137 ms inference and about 2.0 FPS,YOLO RKNN NPU: 71.36 ms inference and about 7.05 FPS,1.92x inference speedup; 3.53x FPS improvement,RKNN deployed on RK3588 NPU

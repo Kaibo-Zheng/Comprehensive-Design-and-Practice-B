@@ -1,2 +1,5 @@
-include src/cconv.c
+include src/cconv.h
+include src/conv5x5.c
+include src/nms.c
+include src/module.c
 include pyproject.toml

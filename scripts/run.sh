@@ -26,7 +26,7 @@ DEAD_ZONE=${DEAD_ZONE:-25}
 MAX_STEP=${MAX_STEP:-0.8}
 STARTUP_CENTER=${STARTUP_CENTER:-pan}
 VOICE_AUDIO_PATH=${VOICE_AUDIO_PATH:-audio/found_person_zh_beep_loud_44k.wav}
-VOICE_PLAYER=${VOICE_PLAYER:-scripts/play_voice_usb.sh}
+VOICE_PLAYER=${VOICE_PLAYER:-scripts/run_player.sh}
 VOICE_COOLDOWN=${VOICE_COOLDOWN:-5}
 LOG=${LOG:-result/logs/rknn_web_voice_fast.csv}
 
@@ -37,7 +37,7 @@ for p in /sys/devices/system/cpu/cpufreq/policy*; do
 done
 
 CMD=(
-  "$PYTHON" -m app
+  "$PYTHON" -m tracker.app
   --camera "$CAMERA"
   --width 640
   --height 480

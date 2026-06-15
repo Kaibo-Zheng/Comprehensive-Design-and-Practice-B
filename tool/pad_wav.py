@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Add leading/trailing silence to a WAV file."""
+"""为 WAV 文件添加开头和结尾静音。"""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from pathlib import Path
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Pad a WAV with silence")
+    parser = argparse.ArgumentParser(description="为 WAV 文件补充静音片段")
     parser.add_argument("input")
     parser.add_argument("output")
     parser.add_argument("--lead-ms", type=int, default=500)

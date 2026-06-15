@@ -1,4 +1,4 @@
-"""OpenCV person detection helpers."""
+"""OpenCV 轻量目标检测辅助模块。"""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from typing import Iterable, List, Tuple
 import cv2
 import numpy as np
 
-from core.config import DetectorConfig
+from common.config import DetectorConfig
 
 
 @dataclass
@@ -28,11 +28,10 @@ class Target:
 
 
 class PersonDetector:
-    """Detect a person using lightweight OpenCV detectors.
+    """使用轻量 OpenCV 检测器定位目标。
 
-    The default mode tracks a visible face and treats it as the person's center.
-    This is usually more stable than full-body detection for a gimbal-mounted
-    webcam at close range.
+    默认模式检测人脸，并将其近似作为人体中心。对于近距离云台摄像头，
+    这种方式通常比全身检测更稳定。
     """
 
     def __init__(self, config: DetectorConfig):

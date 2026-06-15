@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Stream an OpenCV webcam as MJPEG over HTTP.
+"""通过 HTTP 将 OpenCV 摄像头画面输出为 MJPEG 视频流。
 
-This is intended for SSH port forwarding:
+主要用于配合 SSH 端口转发查看开发板摄像头画面：
 
     python -m web.stream_webcam --camera 0 --host 127.0.0.1 --port 8080
     ssh -L 8080:127.0.0.1:8080 user@board
 
-Then open http://127.0.0.1:8080/ locally.
+随后在本机浏览器打开对应地址即可。
 """
 
 from __future__ import annotations

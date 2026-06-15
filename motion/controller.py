@@ -1,11 +1,11 @@
-"""Tracking control logic for converting image error to gimbal angles."""
+"""将图像误差转换为云台角度的跟踪控制逻辑。"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Tuple
 
-from core.config import ControllerConfig, ServoConfig, clamp
+from common.config import ControllerConfig, ServoConfig, clamp
 
 
 @dataclass

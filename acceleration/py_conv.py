@@ -1,4 +1,4 @@
-"""Pure Python/NumPy reference implementation for 5x5 convolution."""
+"""5x5 卷积的 Python/NumPy 参考实现。"""
 
 from __future__ import annotations
 
@@ -22,10 +22,9 @@ def default_kernel() -> np.ndarray:
 
 
 def conv5x5_python(image: np.ndarray, kernel: np.ndarray | None = None) -> np.ndarray:
-    """Apply edge-replicated 5x5 convolution.
+    """执行边缘复制填充的 5x5 卷积。
 
-    This intentionally uses Python loops as the slow reference implementation
-    for comparing with the C extension.
+    这里刻意使用 Python 循环作为较慢的参考实现，用于和 C 扩展对比。
     """
 
     if image.ndim != 2:
@@ -61,12 +60,10 @@ def conv5x5_pymp(
     *,
     threads: int = 4,
 ) -> np.ndarray:
-    """Apply the same 5x5 convolution with pymp row parallelism.
+    """使用 pymp 按行并行执行相同的 5x5 卷积。
 
-    This keeps the intentionally slow Python-loop algorithm but splits image
-    rows across multiple worker processes. It is a fair comparison for the
-    assignment's pymp acceleration suggestion; the C extension remains the
-    production-speed implementation.
+    该实现保留 Python 循环算法，但把图像行分配给多个 worker 处理，用于和串行
+    Python 以及 C 扩展进行性能对比。
     """
 
     try:

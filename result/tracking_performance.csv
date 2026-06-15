@@ -1,0 +1,5 @@
+mode,detector,device,avg_inference_ms,avg_fps,frames,result_note
+OpenCV fallback,face,CPU,63,9.3,30,baseline CPU detector
+YOLO ONNX,yolo11n person,CPU,137,2.0,5,CPU DNN comparison path
+YOLO RKNN,yolo11n person,RK3588 NPU,71.4,7.0,20,20/20 frames detected person
+Real gimbal tracking,face + pan/tilt,PCA9685 servos,,,"150",pan/tilt channels and direction confirmed on hardware

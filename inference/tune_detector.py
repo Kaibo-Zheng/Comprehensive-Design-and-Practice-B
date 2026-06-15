@@ -1,4 +1,4 @@
-"""Preview person detector output without moving the gimbal."""
+"""预览检测器输出，不驱动云台。"""
 
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ import sys
 
 import cv2
 
-from camera import open_camera
-from core.config import CameraConfig, DetectorConfig, parse_camera_source
+from tracker.camera import open_camera
+from common.config import CameraConfig, DetectorConfig, parse_camera_source
 
 from .detector import PersonDetector
 

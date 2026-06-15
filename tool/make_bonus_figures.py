@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate comparison figures for the four bonus items."""
+"""生成各项实验功能的对比图。"""
 
 from __future__ import annotations
 
@@ -44,7 +44,7 @@ def save_bar(
 
 
 def main() -> int:
-    # Bonus 1: C/C++ wheel acceleration
+    # 实验一：C/C++ 扩展加速。
     save_bar(
         OUT / "bonus1_cpp_conv_compare.png",
         "Bonus 1: 5x5 Convolution Acceleration",
@@ -55,7 +55,7 @@ def main() -> int:
         annotate_fmt="{:.3f}",
     )
 
-    # Bonus 2: network programming / web integration
+    # 实验二：网络监控与系统集成。
     save_bar(
         OUT / "bonus2_web_modes_fps.png",
         "Bonus 2: Networked Web Monitor Runtime Modes",
@@ -66,7 +66,7 @@ def main() -> int:
         annotate_fmt="{:.2f}",
     )
 
-    # Bonus 3: task acceleration with pymp
+    # 实验三：使用 pymp 做任务并行加速。
     save_bar(
         OUT / "bonus3_pymp_thread_compare.png",
         "Bonus 3: pymp Thread Scaling on 5x5 Convolution",
@@ -77,7 +77,7 @@ def main() -> int:
         annotate_fmt="{:.1f}",
     )
 
-    # Bonus 4: RKNN deployment + C NMS for the live DNN path
+    # 实验四：RKNN 部署与实时检测后处理加速。
     save_bar(
         OUT / "bonus4_rknn_and_nms_compare.png",
         "Bonus 4: DNN Deployment and Postprocess Acceleration",

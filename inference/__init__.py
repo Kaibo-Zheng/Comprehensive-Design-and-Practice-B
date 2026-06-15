@@ -1,4 +1,4 @@
-"""Inference and detector backends."""
+"""推理与检测后端入口。"""
 
 from .detector import PersonDetector, Target
 

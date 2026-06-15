@@ -1,11 +1,10 @@
-"""YOLO ONNX (CPU) person detector.
+"""基于 ONNX Runtime CPU 的 YOLO 人体检测器。
 
-Loads a YOLOv5/YOLOv8/YOLOv11 ONNX model with onnxruntime and exposes the same
-``detect(frame) -> Target | None`` interface as the OpenCV ``PersonDetector``,
-so the controller/gimbal/metrics never need to know which detector is active.
+该检测器使用 onnxruntime 加载 YOLOv5、YOLOv8 或 YOLOv11 ONNX 模型，并提供与
+OpenCV PersonDetector 相同的 detect 接口，因此控制器、云台和指标记录不需要关心
+当前启用的是哪一种检测器。
 
-Pre/post-processing (letterbox, decode, NMS, target selection) is shared with
-the RKNN detector via :mod:`inference.postprocess`.
+预处理、输出解码、NMS 和主目标选择逻辑由 inference.postprocess 与 RKNN 检测器共用。
 """
 
 from __future__ import annotations
@@ -16,7 +15,7 @@ from typing import Dict, Optional
 
 import numpy as np
 
-from core.config import DetectorConfig
+from common.config import DetectorConfig
 
 from .detector import Target
 from .postprocess import decode_yolo_output, preprocess_yolo, select_target
@@ -55,7 +54,7 @@ class YoloOnnxDetector:
             str(model_path), sess_options=opts, providers=["CPUExecutionProvider"]
         )
         self.input_name = self.session.get_inputs()[0].name
-        # Honor a fixed model input size if the graph declares one.
+        # 如果模型图中声明了固定输入尺寸，则优先使用模型自身尺寸。
         ishape = self.session.get_inputs()[0].shape
         if len(ishape) == 4 and isinstance(ishape[2], int) and ishape[2] > 0:
             self.input_size = int(ishape[2])
@@ -92,7 +91,7 @@ class YoloOnnxDetector:
             self._miss_count = 0
             return target
 
-        # Hold the last target as stale for a few frames, like the OpenCV path.
+        # 与 OpenCV 路线一致，短时间漏检时保留上一目标并标记为历史目标。
         if self._last_target is not None and self._miss_count < self.hold_frames:
             self._miss_count += 1
             return Target(

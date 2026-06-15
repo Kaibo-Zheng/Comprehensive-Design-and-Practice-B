@@ -9,26 +9,32 @@ description = "Two-axis gimbal person tracking package"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "numpy",
-    "opencv-python",
-    "smbus2",
+    "numpy>=1.24",
+    "opencv-python>=4.8",
+    "smbus2>=0.4",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest"]
-onnx = ["onnxruntime"]
+dev = ["build>=1.0", "pytest>=7"]
+onnx = ["onnxruntime>=1.16"]
+acceleration = ["pymp-pypi>=0.5"]
+plots = ["matplotlib>=3.7"]
+all = [
+    "build>=1.0",
+    "matplotlib>=3.7",
+    "onnxruntime>=1.16",
+    "pymp-pypi>=0.5",
+    "pytest>=7",
+]
 
 [project.scripts]
-gimbal-tracker = "app:main"
+gimbal-tracker = "tracker.app:main"
 gimbal-tracker-stream-webcam = "web.stream_webcam:main"
 gimbal-tracker-tune-detector = "inference.tune_detector:main"
 
-[tool.setuptools]
-py-modules = ["app", "camera"]
-
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["core", "core.*", "inference", "inference.*", "motion", "motion.*", "voice", "voice.*", "web", "web.*"]
+include = ["tracker", "tracker.*", "common", "common.*", "inference", "inference.*", "motion", "motion.*", "voice", "voice.*", "web", "web.*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Benchmark Python NMS against the optional C extension NMS."""
+"""对比 Python NMS 与可选 C 扩展 NMS 的性能。"""
 
 from __future__ import annotations
 
@@ -46,7 +46,7 @@ def time_call(fn, iterations: int) -> float:
 
 
 def python_nms_reference(boxes: np.ndarray, scores: np.ndarray, iou_threshold: float) -> list[int]:
-    # Force the pure-Python path by temporarily bypassing the optional C helper.
+    # 临时绕过可选 C 实现，强制走纯 Python 路线。
     import inference.postprocess as postprocess
 
     original = postprocess._nms_c
@@ -65,13 +65,22 @@ def load_cconv_module():
     except Exception:
         pass
 
-    for shared_object in sorted(ACCEL_DIR.glob("_cconv*.so")):
-        spec = importlib.util.spec_from_file_location("_cconv", shared_object)
-        if spec is None or spec.loader is None:
-            continue
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        return module
+    for pattern in ("_cconv*.so", "_cconv*.pyd"):
+        for shared_object in sorted(ACCEL_DIR.glob(pattern)):
+            spec = importlib.util.spec_from_file_location("_cconv", shared_object)
+            if spec is None or spec.loader is None:
+                continue
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            return module
+    for pattern in ("build/**/_cconv*.so", "build/**/_cconv*.pyd"):
+        for shared_object in sorted(ACCEL_DIR.glob(pattern)):
+            spec = importlib.util.spec_from_file_location("_cconv", shared_object)
+            if spec is None or spec.loader is None:
+                continue
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            return module
     raise ImportError(f"local _cconv extension not found under {ACCEL_DIR}")
 
 

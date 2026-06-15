@@ -1,4 +1,4 @@
-"""Benchmark Python, pymp, and C 5x5 convolution implementations."""
+"""对比 Python、pymp 和 C 扩展的 5x5 卷积性能。"""
 
 from __future__ import annotations
 
@@ -44,13 +44,22 @@ def load_cconv_module():
     except Exception:
         pass
 
-    for shared_object in sorted(ACCEL_DIR.glob("_cconv*.so")):
-        spec = importlib.util.spec_from_file_location("_cconv", shared_object)
-        if spec is None or spec.loader is None:
-            continue
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        return module
+    for pattern in ("_cconv*.so", "_cconv*.pyd"):
+        for shared_object in sorted(ACCEL_DIR.glob(pattern)):
+            spec = importlib.util.spec_from_file_location("_cconv", shared_object)
+            if spec is None or spec.loader is None:
+                continue
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            return module
+    for pattern in ("build/**/_cconv*.so", "build/**/_cconv*.pyd"):
+        for shared_object in sorted(ACCEL_DIR.glob(pattern)):
+            spec = importlib.util.spec_from_file_location("_cconv", shared_object)
+            if spec is None or spec.loader is None:
+                continue
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            return module
     raise ImportError(f"local _cconv extension not found under {ACCEL_DIR}")
 
 

@@ -1,0 +1,15 @@
+requirement,item,implementation,latency_ms,speedup,output
+bonus1,5x5 convolution,Python,1493.016,1.00x,figures/bonus1_cpp_conv_compare.png
+bonus1,5x5 convolution,pymp x4,447.617,3.34x,figures/bonus3_pymp_thread_compare.png
+bonus1,5x5 convolution,C extension,0.915,1631.71x,figures/bonus1_cpp_conv_compare.png
+bonus2,web monitor,RKNN only,14.65 fps,,figures/bonus2_web_modes_fps.png
+bonus2,web monitor,RKNN + Web,7.18 fps,,figures/bonus2_web_modes_fps.png
+bonus2,web monitor,RKNN + Web + Voice,16.00 fps,,figures/bonus2_web_modes_fps.png
+bonus3,pymp task acceleration,pymp x1,814.057,0.91x,figures/bonus3_pymp_thread_compare.png
+bonus3,pymp task acceleration,pymp x2,429.372,1.73x,figures/bonus3_pymp_thread_compare.png
+bonus3,pymp task acceleration,pymp x4,253.273,2.93x,figures/bonus3_pymp_thread_compare.png
+bonus3,pymp task acceleration,pymp x8,219.841,3.37x,figures/bonus3_pymp_thread_compare.png
+bonus4,DNN deployment,YOLO ONNX CPU,137.0,,figures/bonus4_rknn_and_nms_compare.png
+bonus4,DNN deployment,YOLO RKNN NPU,53.6,,figures/bonus4_rknn_and_nms_compare.png
+bonus4,NMS postprocess,Python NMS,52.463,1.00x,figures/bonus4_rknn_and_nms_compare.png
+bonus4,NMS postprocess,C NMS,7.093,7.40x,figures/bonus4_rknn_and_nms_compare.png

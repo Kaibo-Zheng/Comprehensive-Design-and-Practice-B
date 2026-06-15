@@ -1,17 +1,15 @@
 #!/usr/bin/env python3
-"""Convert a YOLO ONNX model to RKNN for the RK3588 NPU.
+"""将 YOLO ONNX 模型转换为 RK3588 NPU 使用的 RKNN 模型。
 
-This uses the **full** conversion toolkit ``rknn-toolkit2`` (the ``rknn.api.RKNN``
-class), which is normally installed on an x86 host. The board itself only needs
-``rknn_toolkit_lite2`` to *run* the resulting ``.rknn`` (see
-``inference/yolo_rknn_detector.py``).
+本脚本使用完整转换工具 ``rknn-toolkit2``（即 ``rknn.api.RKNN`` 类），通常在
+x86 主机上安装。开发板运行生成的 ``.rknn`` 文件时只需要 ``rknn_toolkit_lite2``，
+对应运行代码见 ``inference/yolo_rknn_detector.py``。
 
-If the toolkit is not importable, this script exits with a clear message rather
-than a traceback, and tells you where to get it.
+如果当前环境无法导入转换工具，脚本会输出明确提示并退出，而不是直接打印 traceback。
 
-Example::
+示例：
 
-    bash scripts/convert_yolo_rknn.sh \
+    python tool/convert_yolo_rknn.py \
         --onnx model/yolo11n.onnx \
         --output model/yolo11n.rknn \
         --target rk3588
@@ -25,18 +23,17 @@ from pathlib import Path
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Convert YOLO ONNX to RKNN")
-    parser.add_argument("--onnx", required=True, help="Input ONNX model path")
-    parser.add_argument("--output", required=True, help="Output .rknn path")
-    parser.add_argument("--target", default="rk3588", help="Target platform (default rk3588)")
+    parser = argparse.ArgumentParser(description="将 YOLO ONNX 模型转换为 RKNN")
+    parser.add_argument("--onnx", required=True, help="输入 ONNX 模型路径")
+    parser.add_argument("--output", required=True, help="输出 .rknn 模型路径")
+    parser.add_argument("--target", default="rk3588", help="目标平台，默认 rk3588")
     parser.add_argument(
         "--dataset",
         default=None,
-        help="Optional text file listing calibration images, one path per line. "
-        "If given, INT8 quantization is enabled; otherwise the model stays float.",
+        help="可选校准图像列表文件，每行一个路径；提供后启用 INT8 量化，否则保留浮点模型。",
     )
-    parser.add_argument("--mean", default="0,0,0", help="Per-channel mean, comma-separated")
-    parser.add_argument("--std", default="255,255,255", help="Per-channel std, comma-separated")
+    parser.add_argument("--mean", default="0,0,0", help="各通道均值，使用逗号分隔")
+    parser.add_argument("--std", default="255,255,255", help="各通道标准差，使用逗号分隔")
     return parser.parse_args()
 
 
@@ -56,12 +53,12 @@ def main() -> int:
         from rknn.api import RKNN  # type: ignore
     except Exception as exc:  # noqa: BLE001
         print(
-            "error: rknn-toolkit2 is not available in this environment "
+            "error: 当前环境不可用 rknn-toolkit2 "
             f"({type(exc).__name__}: {exc}).\n"
-            "The full conversion toolkit normally runs on an x86_64 host:\n"
-            "  pip install rknn-toolkit2   # x86 host, matching your runtime version\n"
-            "Then run this script there and copy the .rknn back to the board.\n"
-            "The board only needs rknn_toolkit_lite2 to run the model.",
+            "完整转换工具通常在 x86_64 主机上运行：\n"
+            "  pip install rknn-toolkit2\n"
+            "然后在主机上运行本脚本，并把生成的 .rknn 文件复制回开发板。\n"
+            "开发板只需要 rknn_toolkit_lite2 来运行模型。",
             file=sys.stderr,
         )
         return 3

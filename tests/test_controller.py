@@ -1,4 +1,4 @@
-"""Tests for per-axis tracking controller movement flags."""
+"""单轴跟踪控制器运动标志测试。"""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from core.config import ControllerConfig, ServoConfig
+from common.config import ControllerConfig, ServoConfig
 from motion import TrackingController
 
 

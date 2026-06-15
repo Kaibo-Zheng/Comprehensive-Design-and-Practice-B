@@ -1,4 +1,4 @@
-"""Voice notification helpers."""
+"""语音提示辅助模块。"""
 
 from .notifier import SpeechEventGate, VoiceNotifier, format_voice_text
 

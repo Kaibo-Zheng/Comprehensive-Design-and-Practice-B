@@ -1,4 +1,4 @@
-"""Voice notification support for target acquisition events."""
+"""目标出现事件的语音提示支持。"""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from core.config import VoiceConfig
+from common.config import VoiceConfig
 from inference.detector import Target
 
 
@@ -37,7 +37,7 @@ LABEL_ZH = {
 
 
 class SpeechEventGate:
-    """Detect target-acquired edges and apply a cooldown."""
+    """检测目标从无到有的边沿事件，并应用冷却时间。"""
 
     def __init__(
         self,
@@ -78,7 +78,7 @@ def format_voice_text(template: str, target: Target, detector: str) -> str:
 
 
 class VoiceNotifier:
-    """Background MOSS TTS synthesizer/player for target events."""
+    """后台语音合成或播放组件，用于目标出现提示。"""
 
     def __init__(self, config: VoiceConfig, detector_name: str) -> None:
         self.config = config
@@ -130,7 +130,7 @@ class VoiceNotifier:
                 wav_path = self._synthesize(event.text) if self.config.mode == "synthesize" else self._existing_audio(event.text)
                 if self.config.playback:
                     self._play(wav_path)
-            except Exception as exc:  # noqa: BLE001 - voice must not kill tracking
+            except Exception as exc:  # noqa: BLE001
                 self._disabled = True
                 print(f"voice: disabled after error: {exc}", file=sys.stderr, flush=True)
 

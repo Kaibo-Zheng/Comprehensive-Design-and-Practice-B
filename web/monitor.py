@@ -1,16 +1,14 @@
-"""Integrated web monitor for the gimbal tracker.
+"""云台跟踪主程序内置的 Web 监控服务。
 
-Unlike the standalone camera stream module (which owns its own camera), this
-module does **not** capture frames. The main tracking loop pushes the latest
-JPEG-encoded frame and a status dict into a thread-safe :class:`WebState`; the
-HTTP server threads only read from it. This keeps a single owner of the camera
-and lets one command run tracking + remote monitoring together.
+与独立摄像头流模块不同，本模块不直接占用摄像头。主跟踪循环负责把最新 JPEG
+画面和状态字典推入线程安全的 WebState，HTTP 服务线程只负责读取数据。这样可以
+保持摄像头只有一个所有者，同时用一个命令完成跟踪和远程监控。
 
-Endpoints:
-    /              minimal HTML dashboard (auto-refreshing status + MJPEG)
-    /stream.mjpg   multipart MJPEG stream
-    /snapshot.jpg  latest single JPEG
-    /status.json   JSON status (fps, target, error, pan/tilt, lost, detector)
+接口：
+    /              HTML 监控页面
+    /stream.mjpg   MJPEG 视频流
+    /snapshot.jpg  最新单帧 JPEG
+    /status.json   JSON 状态数据
 
 Built only on the standard library (``ThreadingHTTPServer``) — no Flask/FastAPI.
 """
@@ -27,7 +25,7 @@ from typing import Any, Dict, Optional
 
 
 class WebState:
-    """Thread-safe holder for the latest frame and status."""
+    """线程安全地保存最新画面和状态。"""
 
     def __init__(self) -> None:
         self._condition = threading.Condition()
@@ -490,10 +488,10 @@ class _Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
     server: "MonitorServer"
 
-    def log_message(self, *_args: Any) -> None:  # silence per-request logging
+    def log_message(self, *_args: Any) -> None:  # 关闭每个请求的默认日志。
         pass
 
-    def do_GET(self) -> None:  # noqa: N802 (stdlib name)
+    def do_GET(self) -> None:  # noqa: N802
         path = self.path.split("?", 1)[0]
         if path == "/":
             self._send_bytes(_INDEX_HTML.encode("utf-8"), "text/html; charset=utf-8")
@@ -507,8 +505,8 @@ class _Handler(BaseHTTPRequestHandler):
         else:
             self.send_error(HTTPStatus.NOT_FOUND, "not found")
 
-    def do_HEAD(self) -> None:  # noqa: N802 (stdlib name)
-        """Support `curl -I` against the data endpoints (headers only, no body)."""
+    def do_HEAD(self) -> None:  # noqa: N802
+        """支持对数据接口执行只返回响应头的 HEAD 请求。"""
         path = self.path.split("?", 1)[0]
         content_types = {
             "/": "text/html; charset=utf-8",
@@ -577,7 +575,7 @@ class MonitorServer(ThreadingHTTPServer):
 
 
 class WebMonitor:
-    """Owns the HTTP server thread; fed by the main loop via :meth:`update`."""
+    """持有 HTTP 服务线程，由主循环通过 update 推送数据。"""
 
     def __init__(self, host: str, port: int) -> None:
         self.host = host

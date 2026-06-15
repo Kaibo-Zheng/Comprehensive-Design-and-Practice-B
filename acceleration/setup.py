@@ -1,3 +1,5 @@
+"""构建 C 扩展模块的 setuptools 配置。"""
+
 from pathlib import Path
 import os
 
@@ -21,8 +23,12 @@ setup(
     ext_modules=[
         Extension(
             "cpp_conv._cconv",
-            sources=[str(ROOT / "src" / "cconv.c")],
-            include_dirs=[np.get_include()],
+            sources=[
+                str(ROOT / "src" / "module.c"),
+                str(ROOT / "src" / "conv5x5.c"),
+                str(ROOT / "src" / "nms.c"),
+            ],
+            include_dirs=[np.get_include(), str(ROOT / "src")],
             extra_compile_args=["-O3"],
         )
     ],

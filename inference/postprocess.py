@@ -1,14 +1,14 @@
-"""Framework-independent detection post-processing.
+"""与推理框架无关的目标检测后处理。
 
-Shared by the YOLO ONNX and RKNN detectors so neither depends on the other's
-runtime. Contains bounding-box utilities, IoU, NMS, letterbox coordinate
-mapping, and target selection. Boxes are handled in two conventions:
+该模块由 YOLO ONNX 与 RKNN 检测器共用，避免两种运行时互相依赖。
+模块包含边界框转换、IoU、NMS、等比例填充坐标映射和主目标选择等逻辑。
+边界框使用两种表示方式：
 
-- ``xywh``  : ``(x, y, w, h)`` top-left corner + size (the tracker's ``Target``)
-- ``xyxy``  : ``(x1, y1, x2, y2)`` corners (convenient for IoU / NMS)
+- ``xywh``：左上角坐标加宽高，也是跟踪器 Target 使用的格式。
+- ``xyxy``：左上角与右下角坐标，便于计算 IoU 和 NMS。
 
-Functions accept plain tuples/lists or numpy arrays and return plain Python
-floats/ints where a scalar is expected, so results are stable and JSON-safe.
+函数可以接收普通元组、列表或 numpy 数组；需要标量时返回普通 Python 数值，
+便于后续序列化为 JSON。
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ Box = Sequence[float]
 
 
 # --------------------------------------------------------------------------- #
-# Box conversions
+# 边界框格式转换
 # --------------------------------------------------------------------------- #
 def xywh_to_xyxy(box: Box) -> Tuple[float, float, float, float]:
     x, y, w, h = box
@@ -38,10 +38,9 @@ def xyxy_to_xywh(box: Box) -> Tuple[float, float, float, float]:
 
 
 def clip_box(box_xyxy: Box, width: float, height: float) -> Tuple[float, float, float, float]:
-    """Clip an xyxy box to ``[0, width] x [0, height]``.
+    """将 xyxy 边界框裁剪到图像范围内。
 
-    Guarantees ``x2 >= x1`` and ``y2 >= y1`` so the resulting width/height are
-    never negative.
+    函数会保证右下角不小于左上角，因此转换后的宽高不会为负数。
     """
 
     x1, y1, x2, y2 = box_xyxy
@@ -62,10 +61,10 @@ def scale_box(box_xyxy: Box, scale_x: float, scale_y: float) -> Tuple[float, flo
 
 
 # --------------------------------------------------------------------------- #
-# IoU
+# 交并比计算
 # --------------------------------------------------------------------------- #
 def iou(box_a: Box, box_b: Box) -> float:
-    """IoU of two xyxy boxes. Returns 0.0 for non-overlapping or degenerate."""
+    """计算两个 xyxy 边界框的 IoU；无重叠或退化框返回 0。"""
 
     ax1, ay1, ax2, ay2 = (float(v) for v in box_a)
     bx1, by1, bx2, by2 = (float(v) for v in box_b)
@@ -88,7 +87,7 @@ def iou(box_a: Box, box_b: Box) -> float:
 
 
 def iou_batch(boxes_xyxy: np.ndarray, box: Box) -> np.ndarray:
-    """IoU between every row of ``boxes_xyxy`` (N,4) and a single xyxy box."""
+    """计算一组 xyxy 边界框与单个边界框之间的 IoU。"""
 
     boxes = np.asarray(boxes_xyxy, dtype=np.float64).reshape(-1, 4)
     bx1, by1, bx2, by2 = (float(v) for v in box)
@@ -111,10 +110,10 @@ def iou_batch(boxes_xyxy: np.ndarray, box: Box) -> np.ndarray:
 
 
 # --------------------------------------------------------------------------- #
-# NMS
+# 非极大值抑制
 # --------------------------------------------------------------------------- #
 def nms(boxes_xyxy: Sequence[Box], scores: Sequence[float], iou_threshold: float = 0.45) -> List[int]:
-    """Greedy non-maximum suppression. Returns kept indices, highest score first."""
+    """贪心非极大值抑制，按置信度从高到低返回保留索引。"""
 
     if len(boxes_xyxy) == 0:
         return []
@@ -143,20 +142,29 @@ def nms(boxes_xyxy: Sequence[Box], scores: Sequence[float], iou_threshold: float
 
 
 def _nms_c(boxes: np.ndarray, scores: np.ndarray, iou_threshold: float) -> Optional[List[int]]:
-    """Run the optional C NMS extension; return None when unavailable."""
+    """尝试使用可选的 C 扩展 NMS；不可用时返回 None。"""
 
     def load_installed_cconv():
         return importlib.import_module("cpp_conv._cconv")
 
     def load_local_cconv():
         accel_dir = Path(__file__).resolve().parents[1] / "acceleration"
-        for shared_object in sorted(accel_dir.glob("_cconv*.so")):
-            spec = importlib.util.spec_from_file_location("_cconv", shared_object)
-            if spec is None or spec.loader is None:
-                continue
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
-            return module
+        for pattern in ("_cconv*.so", "_cconv*.pyd"):
+            for shared_object in sorted(accel_dir.glob(pattern)):
+                spec = importlib.util.spec_from_file_location("_cconv", shared_object)
+                if spec is None or spec.loader is None:
+                    continue
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+                return module
+        for pattern in ("build/**/_cconv*.so", "build/**/_cconv*.pyd"):
+            for shared_object in sorted(accel_dir.glob(pattern)):
+                spec = importlib.util.spec_from_file_location("_cconv", shared_object)
+                if spec is None or spec.loader is None:
+                    continue
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+                return module
         raise ImportError(f"local _cconv extension not found under {accel_dir}")
 
     try:
@@ -185,16 +193,15 @@ def _nms_c(boxes: np.ndarray, scores: np.ndarray, iou_threshold: float) -> Optio
 
 
 # --------------------------------------------------------------------------- #
-# Letterbox coordinate mapping
+# 等比例填充坐标映射。
 # --------------------------------------------------------------------------- #
 def letterbox_params(
     orig_shape: Tuple[int, int],
     new_shape: Tuple[int, int],
 ) -> Tuple[float, Tuple[float, float]]:
-    """Compute the ratio and (left, top) padding used by a letterbox resize.
+    """计算等比例填充的缩放比例以及左侧、上侧填充量。
 
-    ``orig_shape`` and ``new_shape`` are ``(height, width)``. Padding is the
-    amount added on the top-left side (symmetric padding => half of total).
+    ``orig_shape`` 与 ``new_shape`` 均为高度、宽度形式；填充量表示左上侧新增的像素数。
     """
 
     oh, ow = orig_shape
@@ -212,9 +219,9 @@ def scale_coords_letterbox(
     orig_shape: Tuple[int, int],
     new_shape: Tuple[int, int],
 ) -> np.ndarray:
-    """Map xyxy boxes from letterboxed model space back to the original image.
+    """把模型输入空间中的 xyxy 边界框映射回原图坐标。
 
-    Returns a float array clipped to the original image bounds.
+    返回值会被裁剪到原图范围内。
     """
 
     boxes = np.asarray(boxes_xyxy, dtype=np.float64).reshape(-1, 4).copy()
@@ -231,7 +238,7 @@ def scale_coords_letterbox(
 
 
 # --------------------------------------------------------------------------- #
-# Target selection
+# 主目标选择
 # --------------------------------------------------------------------------- #
 def select_target(
     detections: List[Dict],
@@ -239,17 +246,15 @@ def select_target(
     target_class: Optional[str] = None,
     center_weight: float = 0.25,
 ) -> Optional[Dict]:
-    """Pick a single primary target from a list of detection dicts.
+    """从检测结果列表中选择一个主目标。
 
-    Each detection is expected to look like::
+    每个检测结果应包含如下字段：
 
         {"bbox": (x, y, w, h), "label": "person", "confidence": 0.87,
          "class_id": 0}
 
-    If ``target_class`` is given, only detections whose ``label`` matches are
-    considered. Among the survivors the one maximizing
-    ``area - center_weight * distance_to_center`` is returned (same ranking the
-    OpenCV detector uses), so a large, centered, confident box wins.
+    如果指定了目标类别，则只考虑类别匹配的候选框。最终按照面积和中心距离综合排序，
+    优先选择面积较大且更靠近画面中心的目标。
     """
 
     if not detections:
@@ -276,7 +281,7 @@ def select_target(
 
 
 # --------------------------------------------------------------------------- #
-# YOLO preprocessing + output decoding (shared by ONNX and RKNN detectors)
+# YOLO 预处理与输出解码，供 ONNX 和 RKNN 检测器共用
 # --------------------------------------------------------------------------- #
 COCO_NAMES = [
     "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck",
@@ -295,14 +300,12 @@ COCO_NAMES = [
 
 
 def letterbox(image, new_size: int = 640, color: int = 114):
-    """Resize ``image`` (BGR HxWx3) into a square ``new_size`` letterbox.
+    """将 BGR 图像缩放并填充为正方形等比例填充输入。
 
-    Returns the padded image only; coordinate mapping back to the original is
-    done analytically by :func:`scale_coords_letterbox` using the original and
-    model shapes, so the same ratio/padding convention is shared.
+    函数只返回填充后的图像；坐标还原由 scale_coords_letterbox 根据原图尺寸和模型尺寸计算。
     """
 
-    import cv2  # local import keeps this module importable without a camera
+    import cv2  # 局部导入，避免没有摄像头环境时影响模块加载。
 
     oh, ow = image.shape[:2]
     ratio = min(new_size / oh, new_size / ow)
@@ -317,12 +320,12 @@ def letterbox(image, new_size: int = 640, color: int = 114):
 
 
 def preprocess_yolo(image, new_size: int = 640) -> np.ndarray:
-    """BGR HxWx3 uint8 -> NCHW float32 in [0,1], RGB, letterboxed to new_size."""
+    """将 BGR uint8 图像转为 NCHW、RGB、float32、[0,1] 的 YOLO 输入。"""
 
     padded = letterbox(image, new_size)
-    rgb = padded[:, :, ::-1]  # BGR -> RGB
+    rgb = padded[:, :, ::-1]  # BGR 转 RGB。
     chw = np.ascontiguousarray(rgb.transpose(2, 0, 1), dtype=np.float32) / 255.0
-    return chw[np.newaxis, ...]  # add batch dim
+    return chw[np.newaxis, ...]  # 增加批量维度。
 
 
 def decode_yolo_output(
@@ -334,31 +337,29 @@ def decode_yolo_output(
     num_classes: int = 80,
     class_names: Optional[Sequence[str]] = None,
 ) -> List[Dict]:
-    """Decode a single-image YOLOv5/YOLOv8/YOLOv11 raw output into detections.
+    """将单张图像的 YOLOv5/YOLOv8/YOLOv11 原始输出解码为检测结果。
 
-    Accepts either ``(1, C, N)`` (YOLOv8/v11, channels-major) or
-    ``(1, N, C)`` (YOLOv5, anchors-major). ``C`` is ``4 + num_classes``
-    (no objectness, v8/v11) or ``5 + num_classes`` (objectness, v5). Boxes are
-    decoded in model space (cx,cy,w,h), mapped back to the original image, NMS'd,
-    and returned as dicts ``{bbox(xywh), label, confidence, class_id}``.
+    支持 ``(1, C, N)`` 和 ``(1, N, C)`` 两种输出布局。函数会在模型输入空间解码
+    ``cx, cy, w, h``，再映射回原图，经过 NMS 后返回 bbox、label、confidence
+    和 class_id。
     """
 
     names = list(class_names) if class_names is not None else COCO_NAMES
     arr = np.asarray(raw)
     if arr.ndim == 3:
         arr = arr[0]
-    # Orient to (N, C): the class/box axis is the small one.
+    # 统一整理为 (N, C)，类别和边界框所在轴通常较短。
     if arr.shape[0] < arr.shape[1]:
         arr = arr.T  # (C, N) -> (N, C)
 
     n_attrs = arr.shape[1]
     if n_attrs == num_classes + 5:
-        # YOLOv5: cx,cy,w,h,obj,<classes>
+        # YOLOv5：中心点、宽高、目标分数和类别分数。
         boxes_cxcywh = arr[:, :4]
         obj = arr[:, 4:5]
         class_scores = arr[:, 5:] * obj
     elif n_attrs == num_classes + 4:
-        # YOLOv8/v11: cx,cy,w,h,<classes>
+        # YOLOv8/v11：中心点、宽高和类别分数。
         boxes_cxcywh = arr[:, :4]
         class_scores = arr[:, 4:]
     else:
@@ -379,11 +380,11 @@ def decode_yolo_output(
     class_ids = class_ids[keep_mask]
     confidences = confidences[keep_mask]
 
-    # cxcywh -> xyxy in model space
+    # 在模型输入空间中将 cxcywh 转为 xyxy。
     cx, cy, w, h = boxes_cxcywh[:, 0], boxes_cxcywh[:, 1], boxes_cxcywh[:, 2], boxes_cxcywh[:, 3]
     xyxy = np.stack([cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2], axis=1)
 
-    # map back to the original image
+    # 映射回原始图像坐标。
     xyxy = scale_coords_letterbox(xyxy, orig_shape, (input_size, input_size))
 
     keep = nms(xyxy, confidences, iou_threshold=iou_thres)

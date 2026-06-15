@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Safely sweep one PCA9685 servo axis for hardware bring-up."""
+"""安全地扫动 PCA9685 的单个舵机轴，用于硬件调试。"""
 
 from __future__ import annotations
 
@@ -12,14 +12,14 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from core.config import ServoAxisConfig, ServoConfig
+from common.config import ServoAxisConfig, ServoConfig
 from motion.gimbal import Gimbal
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Sweep one gimbal servo axis")
+    parser = argparse.ArgumentParser(description="扫动云台单个舵机轴")
     parser.add_argument("--axis", choices=["pan", "tilt"], default="tilt")
-    parser.add_argument("--channel", type=int, default=None, help="PCA9685 channel; defaults to axis convention")
+    parser.add_argument("--channel", type=int, default=None, help="PCA9685 通道；默认按轴约定选择")
     parser.add_argument("--bus", type=int, default=1)
     parser.add_argument("--address", type=lambda x: int(x, 0), default=0x40)
     parser.add_argument("--center", type=float, default=90.0)
